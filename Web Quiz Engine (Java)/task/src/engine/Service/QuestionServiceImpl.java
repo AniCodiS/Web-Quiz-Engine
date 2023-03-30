@@ -1,5 +1,6 @@
 package engine.Service;
 
+import com.google.gson.JsonObject;
 import engine.Entity.Answer;
 import engine.Entity.AnswerIndex;
 import engine.Entity.Completion;
@@ -11,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
@@ -25,16 +27,14 @@ import org.springframework.data.domain.Pageable;
 @Service
 public class QuestionServiceImpl implements QuestionService {
 
-    @Autowired
     private QuestionRepository questionRepo;
-    @Autowired
-    private AnswerRepository answerRepo;
-    @Autowired
-    private AnswerIndexRepository answerIndexRepo;
-    @Autowired
-    private UserRepository userRepo;
-    @Autowired
     private CompletionRepository completionRepo;
+
+    @Autowired
+    public QuestionServiceImpl(QuestionRepository questionRepo, CompletionRepository completionRepo) {
+        this.questionRepo = questionRepo;
+        this.completionRepo = completionRepo;
+    }
 
     public Page<Question> getQuestions(int pageNo, int pageSize, String sortBy) {
         Pageable paging = PageRequest.of(pageNo, pageSize, Sort.by(sortBy));
@@ -91,58 +91,43 @@ public class QuestionServiceImpl implements QuestionService {
 
     public ResponseEntity<String> addQuestionCompletion(int[] guessedAnswers,
                                                         Question requestedQuestion,
-                                                        ArrayList<AnswerIndex> AnswerIndexes,
+                                                        ArrayList<AnswerIndex> answerIndexes,
                                                         Authentication auth) {
         String userEmail = auth.getName();
 
-        Completion newCompletion = new Completion();
-        LocalDateTime now = LocalDateTime.now();
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSSSS");
-        String formattedDateTime = now.format(formatter);
-        newCompletion.setCompletedAt(formattedDateTime);
-        newCompletion.setQuestion(requestedQuestion);
-        newCompletion.setUserEmail(userEmail);
+        // Check if the requested question exists
+        if (requestedQuestion == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Not Found");
+        }
 
+        // Sort guessed and correct answer indexes
         if (guessedAnswers != null) {
             Arrays.sort(guessedAnswers);
         }
-
-        if (requestedQuestion == null) {
-            return ResponseEntity.status(404).body("Not Found");
-        }
-        int[] correctAnswers = new int[AnswerIndexes.size()];
-        for (int i = 0; i < AnswerIndexes.size(); i++) {
-            correctAnswers[i] = AnswerIndexes.get(i).getIndex();
-        }
+        int[] correctAnswers = answerIndexes.stream().mapToInt(AnswerIndex::getIndex).toArray();
         Arrays.sort(correctAnswers);
 
-        if (guessedAnswers == null) {
-            if (correctAnswers.length == 0) {
-                this.completionRepo.save(newCompletion);
-                return ResponseEntity.ok().body("{\"success\":true,\"feedback\":\"Congratulations, you're right!\"}");
-            } else {
-                return ResponseEntity.ok().body("{\"success\":false,\"feedback\":\"Wrong answer! Please try again.\"}");
-            }
-        }
-        if (correctAnswers.length == 0) {
-            if (guessedAnswers.length == 0) {
-                this.completionRepo.save(newCompletion);
-                return ResponseEntity.ok().body("{\"success\":true,\"feedback\":\"Congratulations, you're right!\"}");
-            } else {
-                return ResponseEntity.ok().body("{\"success\":false,\"feedback\":\"Wrong answer! Please try again.\"}");
-            }
+        // Check if guessed and correct answer indexes match
+        boolean isCorrect = Arrays.equals(guessedAnswers, correctAnswers);
+        String feedback = isCorrect ? "Congratulations, you're right!" : "Wrong answer! Please try again.";
+
+        // Create completion instance and add it to the table
+        Completion newCompletion = new Completion();
+        LocalDateTime now = LocalDateTime.now();
+        String formattedDateTime = now.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+        newCompletion.setCompletedAt(formattedDateTime);
+        newCompletion.setQuestion(requestedQuestion);
+        newCompletion.setUserEmail(userEmail);
+        if (isCorrect) {
+            completionRepo.save(newCompletion);
         }
 
-        if (correctAnswers.length != guessedAnswers.length) {
-            return ResponseEntity.ok().body("{\"success\":false,\"feedback\":\"Wrong answer! Please try again.\"}");
-        }
-        for (int i = 0; i < correctAnswers.length; i++) {
-            if (correctAnswers[i] != guessedAnswers[i]) {
-                return ResponseEntity.ok().body("{\"success\":false,\"feedback\":\"Wrong answer! Please try again.\"}");
-            }
-        }
-        this.completionRepo.save(newCompletion);
-        return ResponseEntity.ok().body("{\"success\":true,\"feedback\":\"Congratulations, you're right!\"}");
+        // Construct response JSON
+        JsonObject responseJson = new JsonObject();
+        responseJson.addProperty("success", isCorrect);
+        responseJson.addProperty("feedback", feedback);
+
+        return ResponseEntity.ok().body(responseJson.toString());
     }
 
     public Page<Completion> getCompletedQuestions(int pageNo, int pageSize, String sortBy) {

@@ -2,6 +2,7 @@ package engine.Service;
 
 import engine.Entity.Answer;
 import engine.Entity.AnswerIndex;
+import engine.Entity.Completion;
 import engine.Entity.Question;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
@@ -26,6 +27,7 @@ public interface QuestionService {
                                                         Question requestedQuestion,
                                                         ArrayList<AnswerIndex> AnswerIndexes,
                                                         Authentication auth);
+    Page<Completion> getCompletedQuestions(int pageNo, int pageSize, String sortBy);
 
     void deleteQuestion(Question question);
 

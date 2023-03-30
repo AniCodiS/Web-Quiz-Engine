@@ -6,6 +6,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.micrometer.core.instrument.util.StringUtils;
 
 import javax.persistence.*;
 import java.util.ArrayList;
@@ -87,6 +88,21 @@ public class Question {
 
     public void setCreatorEmail(String creatorEmail) {
         this.creatorEmail = creatorEmail;
+    }
+
+    public boolean isValid() {
+        // Check if the title is not empty
+        if (StringUtils.isEmpty(this.getTitle())) {
+            return false;
+        }
+
+        // Check if the text is not empty
+        if (StringUtils.isEmpty(this.getText())) {
+            return false;
+        }
+
+        // Check if there are at least 2 options
+        return this.getOptions() != null && this.getOptions().size() >= 2;
     }
 
     public String toJson() {

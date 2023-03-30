@@ -30,4 +30,16 @@ public class User {
     public void setPassword(String password) {
         this.password = password;
     }
+
+    public boolean isValid() {
+        if (email != null) {
+            if (!email.contains("@") || !email.contains(".")) {
+                return false;
+            }
+        }
+        if (password != null) {
+            return password.length() >= 5;
+        }
+        return true;
+    }
 }
